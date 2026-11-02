@@ -411,6 +411,40 @@ def test_list_jobs(local_backend, test_case):
     assert isinstance(jobs, list)
 
 
+def test_list_jobs_status(local_backend):
+    """Test that list_jobs reports real job status instead of Unknown."""
+    runtime = types.Runtime(
+        name=TORCH_RUNTIME,
+        trainer=types.RuntimeTrainer(
+            trainer_type=types.TrainerType.CUSTOM_TRAINER,
+            framework="torch",
+            num_nodes=1,
+            image=LOCAL_RUNTIME_IMAGE,
+        ),
+        kind=types.RuntimeKind.TRAINING_RUNTIME,
+    )
+    job1 = Mock(status=constants.TRAINJOB_COMPLETE)
+    job2 = Mock(status=constants.TRAINJOB_FAILED)
+    local_backend._LocalProcessBackend__register_job(
+        train_job_name="job-completed",
+        step_name="train",
+        job=job1,
+        runtime=runtime,
+    )
+    local_backend._LocalProcessBackend__register_job(
+        train_job_name="job-failed",
+        step_name="train",
+        job=job2,
+        runtime=runtime,
+    )
+    jobs = local_backend.list_jobs()
+    assert len(jobs) == 2
+    assert all(j.status != constants.JOB_STATUS_UNKNOWN for j in jobs)
+    status_by_name = {j.name: j.status for j in jobs}
+    assert status_by_name["job-completed"] == constants.TRAINJOB_COMPLETE
+    assert status_by_name["job-failed"] == constants.TRAINJOB_FAILED
+
+
 @pytest.mark.parametrize(
     "test_case",
     [
